@@ -1,0 +1,14 @@
+{
+    "name": "algo-test",
+    "version": "1.0.0",
+    "description": "Algorithm testing with Mocha",
+    "main": "index.js",
+    "scripts": {
+      "test": "mocha"
+    },
+    "dependencies": {},
+    "devDependencies": {
+      "mocha": "^8.0.0"
+    }
+  }
+  

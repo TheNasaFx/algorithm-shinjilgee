@@ -23,12 +23,12 @@ sol = Solution()
 
 # Test case 1
 s1 = "YazaAay"
-print(sol.longestNiceSubstring(s1))  # Output: "aAa"
+print(sol.longestNiceSubstring(s1))  # Expected output: "aAa"
 
 # Test case 2
 s2 = "Bb"
-print(sol.longestNiceSubstring(s2))  # Output: "Bb"
+print(sol.longestNiceSubstring(s2))  # Expected output: "Bb"
 
 # Test case 3
 s3 = "c"
-print(sol.longestNiceSubstring(s3))  # Output: ""
+print(sol.longestNiceSubstring(s3))  # Expected output: ""

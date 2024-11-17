@@ -31,10 +31,10 @@ def threeSum(nums):
 
 # Test cases
 nums1 = [-1, 0, 1, 2, -1, -4]
-print(threeSum(nums1))  # Expected : [[-1, -1, 2], [-1, 0, 1]]
+print(threeSum(nums1))  # Expected: [[-1, -1, 2], [-1, 0, 1]]
 
 nums2 = [0, 1, 1]
-print(threeSum(nums2))  # Expected : []
+print(threeSum(nums2))  # Expected: []
 
 nums3 = [0, 0, 0]
-print(threeSum(nums3))  # Expected : [[0, 0, 0]]
+print(threeSum(nums3))  # Expected: [[0, 0, 0]]
