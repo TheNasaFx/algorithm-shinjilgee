@@ -10,6 +10,7 @@ def assignBikes(students, bikes):
 
     distances.sort()
     result = [-1] * n
+    #bbbb
     bike_used = [False] * m
 
     for dist, student, bike in distances:

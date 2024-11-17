@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mongolian Text Processor</title>
+    <style>
+        .misspelled { text-decoration: underline; color: red; }
+    </style>
+</head>
+<body>
+    <h1>Mongolian Text Processor</h1>
+    <textarea id="textInput" rows="10" cols="50" placeholder="Enter your text here..."></textarea>
+    <button onclick="processText()">Process Text</button>
+
+    <h2>Processed Output</h2>
+    <div id="output"></div>
+
+    <script>
+        async function processText() {
+            const text = document.getElementById('textInput').value;
+
+            const response = await fetch('/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+            
+            const data = await response.json();
+            displayResults(data);
+        }
+
+        function displayResults(data) {
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = `
+                <p><strong>Processed Text:</strong> ${data.processed_text}</p>
+                <p><strong>Misspelled Words:</strong></p>
+                <ul>${Object.entries(data.misspelled_words).map(([word, suggestion]) => `<li>${word}: ${suggestion}</li>`).join('')}</ul>
+                <p><strong>Unique Word Count:</strong> ${data.unique_word_count}</p>
+                <p><strong>Top 10 Words:</strong></p>
+                <ul>${Object.entries(data.top_10_words).map(([word, freq]) => `<li>${word}: ${freq}</li>`).join('')}</ul>
+            `;
+        }
+    </script>
+</body>
+</html>

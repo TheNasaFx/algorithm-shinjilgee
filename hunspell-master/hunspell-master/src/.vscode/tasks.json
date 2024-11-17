@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Hunspell",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-o", 
+                "hunspell.exe",
+                "src/hunspell/hunspell.cpp", 
+                "-I", "src/hunspell", 
+                "-L", "lib", 
+                "-lHunspell"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Compile Hunspell"
+        }
+    ]
+}

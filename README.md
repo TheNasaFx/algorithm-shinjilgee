@@ -1,2 +1,2 @@
 # algo-shinjilge
- lab
+ lab bolon biydaaltuud
