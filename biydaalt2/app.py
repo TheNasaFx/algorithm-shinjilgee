@@ -1,72 +1,212 @@
-from flask import Flask, request, jsonify
+import os
+import re
+import json
+import traceback
 from collections import Counter
-from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer
-import hunspell
+
+from flask import Flask, render_template, request, jsonify
+import regex
+
+# Machine Learning content classification (optional)
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+
+try:
+    from spylls.hunspell import Dictionary
+except ImportError:
+    print("Spylls Hunspell library not found. Please install using: pip install spylls")
+    Dictionary = None
 
 app = Flask(__name__)
 
-# Initialize Hunspell for spell-checking
-hunspell_instance = hunspell.HunSpell('mn.dic', 'mn.aff') 
-
-# Process Text Function
-def process_text(text):
-    # Spell-checking and underlining misspelled words
-    def spell_check(text):
-        words = text.split()
-        misspelled = {}
-        checked_text = []
+# Advanced content classification model
+class ContentClassifier:
+    def __init__(self):
+        # Predefined categories and training data
+        self.categories = [
+            'Эдийн засаг', 
+            'Спорт', 
+            'Улс төр', 
+            'Соёл', 
+            'Технологи'
+        ]
         
-        for word in words:
-            if not hunspell_instance.spell(word):
-                suggestion = hunspell_instance.suggest(word)
-                misspelled[word] = suggestion[0] if suggestion else "No suggestion"
-                checked_text.append(f"<u>{word}</u>")  # Underline misspelled word
-            else:
-                checked_text.append(word)
+        # Sample training texts for each category
+        self.training_data = {
+            'Эдийн засаг': [
+                'валют', 'хөрөнгө', 'зах зээл', 'эдийн засаг', 
+                'орлого', 'зардал', 'бизнес', 'хөгжил'
+            ],
+            'Спорт': [
+                'тив', 'тоглолт', 'өрсөлдөөн', 'спорт', 
+                'тамир', 'дасгал', 'тэмцээн', 'хол'
+            ],
+            'Улс төр': [
+                'улс', 'төр', 'сонгууль', 'засгийн газар', 
+                'бодлого', 'улсын', 'хууль'
+            ],
+            'Соёл': [
+                'соёл', 'урлаг', 'уран', 'дуу', 'дуурсгал', 
+                'өв', 'уламжлал'
+            ],
+            'Технологи': [
+                'технологи', 'компьютер', 'сүлжээ', 'интернет', 
+                'инновац', 'сервер', 'программ'
+            ]
+        }
+        
+        self.vectorizer = TfidfVectorizer()
+        self.classifier = MultinomialNB()
+        
+        self._train()
+    
+    def _train(self):
+        # Prepare training data
+        texts = []
+        labels = []
+        
+        for category, keywords in self.training_data.items():
+            for keyword in keywords:
+                texts.append(keyword)
+                labels.append(category)
+        
+        X = self.vectorizer.fit_transform(texts)
+        self.classifier.fit(X, labels)
+    
+    def predict_category(self, text):
+        try:
+            # Vectorize input text
+            text_vector = self.vectorizer.transform([text])
+            prediction = self.classifier.predict(text_vector)
+            return prediction[0]
+        except Exception:
+            return "Ерөнхий мэдээлөл"
 
-        checked_text = " ".join(checked_text)
-        return checked_text, misspelled
+# Global instances
+content_classifier = ContentClassifier()
 
-    # Stemming and unique word counting
-    def stem_words(text):
-        stemmer = SnowballStemmer("mongolian")
-        return [stemmer.stem(word) for word in text.split()]
+# Dictionary loading
+def load_hunspell_dictionary():
+    try:
+        dict_path = os.path.join(os.path.dirname(__file__), 'mn')
+        aff_file = dict_path + '.aff'
+        dic_file = dict_path + '.dic'
+        
+        if not (os.path.exists(aff_file) and os.path.exists(dic_file)):
+            print(f"Dictionary files not found. Paths checked: {aff_file}, {dic_file}")
+            return None
+        
+        return Dictionary.from_files(dict_path)
+    except Exception as e:
+        print(f"Dictionary Loading Error: {e}")
+        return None
 
-    # Removing common stop words
-    def remove_stopwords(words):
-        stop_words = set(stopwords.words('mongolian'))
-        return [word for word in words if word.lower() not in stop_words]
+# Global Hunspell instance
+hunspell_instance = load_hunspell_dictionary()
 
-    # Counting unique words and finding top 10 frequent words
-    def count_unique_words(words):
-        return len(set(words))
+# Advanced stop words
+STOP_WORDS = {
+    'ба', 'болон', 'гэх', 'тэр', 'энэ', 'байна', 'юм', 'байх', 
+    'нь', 'гэж', 'хүн', 'бол', 'хэрэг', 'үед', 'хамаагүй', 
+    'биш', 'юу', 'хэн', 'хаана', 'яагаад', 'яах', 'яг'
+}
 
-    def get_top_10_words(words):
-        common_words = Counter(words).most_common(10)
-        return {word: freq for word, freq in common_words}
+def count_mongolian_words(text):
+    """
+    More robust word counting for Mongolian text
+    Considers Mongolian words and handles various text scenarios
+    """
+    # Use regex to find all Mongolian words, filtering out very short tokens
+    words = [word for word in regex.findall(r'\p{Mongolian}+', text) if len(word) > 1]
+    return len(words)
 
-    # Full processing
-    checked_text, misspelled_words = spell_check(text)
-    stemmed_words = stem_words(text)
-    filtered_words = remove_stopwords(stemmed_words)
-    unique_word_count = count_unique_words(filtered_words)
-    top_10_words = get_top_10_words(filtered_words)
+def stem_word(word):
+    """Advanced word stemming."""
+    if hunspell_instance:
+        try:
+            stems = hunspell_instance.stem(word)
+            return stems[0] if stems else word
+        except Exception:
+            return word
+    return word
+
+def process_text_analytics(text):
+    """Comprehensive text processing."""
+    # Tokenization
+    words = regex.findall(r'\p{Mongolian}+', text.lower())
+    
+    # Remove stop words and stem
+    processed_words = [
+        stem_word(word) 
+        for word in words 
+        if word not in STOP_WORDS
+    ]
+    
+    # Analytics
+    unique_words = set(processed_words)
+    word_freq = Counter(processed_words)
+    
+    # Top words excluding any remaining stop words
+    top_words = {
+        word: count 
+        for word, count in word_freq.most_common(10) 
+        if word not in STOP_WORDS
+    }
+    
+    # Misspelled words detection
+    misspelled = {}
+    if hunspell_instance:
+        misspelled = {
+            word: hunspell_instance.suggest(word)[:3] 
+            for word in words 
+            if not hunspell_instance.spell(word)
+        }
     
     return {
-        "processed_text": checked_text,
-        "misspelled_words": misspelled_words,
-        "unique_word_count": unique_word_count,
-        "top_10_words": top_10_words
+        'unique_word_count': len(unique_words),
+        'top_words': top_words,
+        'misspelled_words': misspelled,
+        'content_category': content_classifier.predict_category(text)
     }
 
-# Flask route to process text
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/process', methods=['POST'])
-def process():
-    data = request.get_json()
-    text = data.get("text", "")
-    result = process_text(text)
-    return jsonify(result)
+def text_processor():
+    try:
+        # Input validation
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({"error": "No text provided"}), 400
+        
+        # Debugging: Log the received text
+        print(f"Received text: {data['text'][:100]}...")  # Log first 100 chars
+
+        text = data['text']
+        
+        # Improved word count check
+        word_count = count_mongolian_words(text)
+        print(f"Word count: {word_count}")  # Log word count for debugging
+        
+        if word_count < 300:
+            return jsonify({
+                "error": f"Insufficient text length. Minimum 300 words required. Current: {word_count}"
+            }), 400
+        
+        # Process text
+        results = process_text_analytics(text)
+        
+        return jsonify(results)
+    
+    except Exception as e:
+        # Comprehensive error logging
+        app.logger.error(f"Processing Error: {traceback.format_exc()}")
+        return jsonify({
+            "error": "Text Processing Failed",
+            "details": str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

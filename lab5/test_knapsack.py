@@ -1,5 +1,5 @@
 import unittest
-from knapsack import knapsack
+from lab5.knapsack import knapsack
 
 class TestKnapsack(unittest.TestCase):
     def test_knapsack(self):

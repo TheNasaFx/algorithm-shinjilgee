@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="mn">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Монгол бичиг Боловсруулагч</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-gray-100 p-8">
+    <div class="container mx-auto max-w-2xl bg-white p-6 rounded-lg shadow-md">
+      <h1 class="text-2xl font-bold mb-4 text-center">
+        Монгол бичиг Боловсруулагч
+      </h1>
+
+      <textarea
+        id="textInput"
+        rows="10"
+        class="w-full p-2 border rounded mb-4"
+        placeholder="Энд монгол бичгээ оруулна уу... (300-аас дээш үг)"
+      ></textarea>
+
+      <button
+        onclick="processText()"
+        class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
+      >
+        Боловсруулах
+      </button>
+
+      <div id="output" class="mt-4 p-4 bg-gray-50 rounded"></div>
+      <div id="debugInfo" class="mt-4 p-4 bg-gray-100 rounded text-sm"></div>
+    </div>
+
+    <script>
+      async function processText() {
+        const textInput = document.getElementById("textInput");
+        const outputDiv = document.getElementById("output");
+        const debugDiv = document.getElementById("debugInfo");
+        const text = textInput.value.trim();
+
+        // Debug: Log text details
+        console.log("Text length:", text.length);
+        console.log("First 50 characters:", text.substring(0, 50));
+        console.log("Word count (space-split):", text.split(/\s+/).length);
+        console.log("Raw text:", text);
+
+        debugDiv.innerHTML = `Бичигийн урт: ${text.length} тэмдэгт.`;
+
+        try {
+          const response = await fetch("/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || "Алдаа гарлаа");
+          }
+
+          // Display results
+          outputDiv.innerHTML = `
+            <h3 class="text-xl font-bold">Үр дүн:</h3>
+            <p><strong>Нийт үгсийн тоо:</strong> ${data.unique_word_count}</p>
+            <p><strong>Хамгийн их давтагдсан үгс:</strong></p>
+            <ul class="list-disc pl-5">
+              ${Object.entries(data.top_words)
+                .map(([word, count]) => `<li>${word}: ${count} удаа</li>`)
+                .join("")}
+            </ul>
+            <p><strong>Алдаатай үгс:</strong></p>
+            <ul class="list-disc pl-5">
+              ${Object.entries(data.misspelled_words)
+                .map(
+                  ([word, suggestions]) =>
+                    `<li>${word}: ${suggestions.join(", ")}</li>`
+                )
+                .join("")}
+            </ul>
+            <p><strong>Агуулгын ангилал:</strong> ${data.content_category}</p>
+          `;
+        } catch (error) {
+          outputDiv.innerHTML = `
+            <p class="text-red-500">
+              Алдаа гарлаа: ${error.message}
+            </p>
+          `;
+          console.error(error);
+        }
+      }
+    </script>
+  </body>
+</html>
