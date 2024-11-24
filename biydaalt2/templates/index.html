@@ -1,95 +1,167 @@
 <!DOCTYPE html>
-<html lang="mn">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <title>Монгол бичиг Боловсруулагч</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
-      rel="stylesheet"
-    />
+    <title>Монгол Текст Шалгагч</title>
+    <style>
+      .container {
+        margin: 20px;
+        max-width: 800px;
+      }
+      #textInput {
+        width: 100%;
+        min-height: 200px;
+        padding: 10px;
+        margin-bottom: 20px;
+        font-size: 16px;
+      }
+      .misspelled {
+        text-decoration: underline wavy red;
+        cursor: pointer;
+      }
+      #suggestions {
+        position: absolute;
+        background: white;
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+        padding: 5px;
+        display: none;
+        z-index: 1000;
+      }
+      .suggestion-item {
+        cursor: pointer;
+        padding: 5px;
+      }
+      .suggestion-item:hover {
+        background: #f0f0f0;
+      }
+      #stats {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+      #textDisplay {
+        border: 1px solid #ccc;
+        min-height: 200px;
+        padding: 10px;
+        margin-top: 20px;
+        white-space: pre-wrap;
+      }
+    </style>
   </head>
-  <body class="bg-gray-100 p-8">
-    <div class="container mx-auto max-w-2xl bg-white p-6 rounded-lg shadow-md">
-      <h1 class="text-2xl font-bold mb-4 text-center">
-        Монгол бичиг Боловсруулагч
-      </h1>
-
-      <textarea
-        id="textInput"
-        rows="10"
-        class="w-full p-2 border rounded mb-4"
-        placeholder="Энд монгол бичгээ оруулна уу... (300-аас дээш үг)"
-      ></textarea>
-
-      <button
-        onclick="processText()"
-        class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
-      >
-        Боловсруулах
-      </button>
-
-      <div id="output" class="mt-4 p-4 bg-gray-50 rounded"></div>
-      <div id="debugInfo" class="mt-4 p-4 bg-gray-100 rounded text-sm"></div>
+  <body>
+    <div class="container">
+      <textarea id="textInput" placeholder="Текстээ энд бичнэ үү..."></textarea>
+      <div id="textDisplay"></div>
+      <div id="suggestions"></div>
+      <div id="stats"></div>
     </div>
 
     <script>
-      async function processText() {
-        const textInput = document.getElementById("textInput");
-        const outputDiv = document.getElementById("output");
-        const debugDiv = document.getElementById("debugInfo");
-        const text = textInput.value.trim();
+      const textInput = document.getElementById("textInput");
+      const textDisplay = document.getElementById("textDisplay");
+      const suggestionsDiv = document.getElementById("suggestions");
+      const statsDiv = document.getElementById("stats");
+      let currentMisspelled = [];
 
-        // Debug: Log text details
-        console.log("Text length:", text.length);
-        console.log("First 50 characters:", text.substring(0, 50));
-        console.log("Word count (space-split):", text.split(/\s+/).length);
-        console.log("Raw text:", text);
+      textInput.addEventListener("input", debounce(checkText, 500));
 
-        debugDiv.innerHTML = `Бичигийн урт: ${text.length} тэмдэгт.`;
-
-        try {
-          const response = await fetch("/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.error || "Алдаа гарлаа");
-          }
-
-          // Display results
-          outputDiv.innerHTML = `
-            <h3 class="text-xl font-bold">Үр дүн:</h3>
-            <p><strong>Нийт үгсийн тоо:</strong> ${data.unique_word_count}</p>
-            <p><strong>Хамгийн их давтагдсан үгс:</strong></p>
-            <ul class="list-disc pl-5">
-              ${Object.entries(data.top_words)
-                .map(([word, count]) => `<li>${word}: ${count} удаа</li>`)
-                .join("")}
-            </ul>
-            <p><strong>Алдаатай үгс:</strong></p>
-            <ul class="list-disc pl-5">
-              ${Object.entries(data.misspelled_words)
-                .map(
-                  ([word, suggestions]) =>
-                    `<li>${word}: ${suggestions.join(", ")}</li>`
-                )
-                .join("")}
-            </ul>
-            <p><strong>Агуулгын ангилал:</strong> ${data.content_category}</p>
-          `;
-        } catch (error) {
-          outputDiv.innerHTML = `
-            <p class="text-red-500">
-              Алдаа гарлаа: ${error.message}
-            </p>
-          `;
-          console.error(error);
-        }
+      function debounce(func, wait) {
+        let timeout;
+        return function (...args) {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(this, args), wait);
+        };
       }
+
+      function checkText() {
+        const text = textInput.value;
+        fetch("/check", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ text: text }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            currentMisspelled = data.misspelled;
+            highlightMisspelledWords(text, data.misspelled);
+            updateStats(data);
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function highlightMisspelledWords(text, misspelled) {
+        let highlightedText = text;
+
+        // Apply highlights from end to start to maintain positions
+        for (let i = misspelled.length - 1; i >= 0; i--) {
+          const word = misspelled[i];
+          highlightedText =
+            highlightedText.substring(0, word.start) +
+            `<span class="misspelled" data-index="${i}">` +
+            highlightedText.substring(word.start, word.end) +
+            "</span>" +
+            highlightedText.substring(word.end);
+        }
+
+        textDisplay.innerHTML = highlightedText;
+
+        // Add event listeners for suggestions
+        document.querySelectorAll(".misspelled").forEach((span) => {
+          span.addEventListener("contextmenu", showSuggestions);
+        });
+      }
+
+      function showSuggestions(e) {
+        e.preventDefault();
+        const index = parseInt(e.target.dataset.index);
+        const word = currentMisspelled[index];
+
+        suggestionsDiv.innerHTML = "";
+        word.suggestions.forEach((suggestion) => {
+          const div = document.createElement("div");
+          div.className = "suggestion-item";
+          div.textContent = suggestion;
+          div.onclick = () => replaceMisspelledWord(word, suggestion);
+          suggestionsDiv.appendChild(div);
+        });
+
+        suggestionsDiv.style.display = "block";
+        suggestionsDiv.style.left = e.pageX + "px";
+        suggestionsDiv.style.top = e.pageY + "px";
+      }
+
+      function replaceMisspelledWord(word, suggestion) {
+        const text = textInput.value;
+        textInput.value =
+          text.substring(0, word.start) + suggestion + text.substring(word.end);
+
+        suggestionsDiv.style.display = "none";
+        checkText();
+      }
+
+      function updateStats(data) {
+        statsDiv.innerHTML = `
+                <h3>Текстийн шинжилгээ:</h3>
+                <p>Нийт ялгаатай үг: ${data.unique_words}</p>
+                <h4>Хамгийн их давтагдсан 10 үг:</h4>
+                <ul>
+                    ${data.top_words
+                      .map(([word, count]) => `<li>${word}: ${count} удаа</li>`)
+                      .join("")}
+                </ul>
+                <p>Текстийн ангилал: ${data.category}</p>
+            `;
+      }
+
+      // Close suggestions when clicking outside
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#suggestions")) {
+          suggestionsDiv.style.display = "none";
+        }
+      });
     </script>
   </body>
 </html>

@@ -1,212 +1,144 @@
-import os
+from flask import Flask, request, jsonify, render_template
 import re
-import json
-import traceback
 from collections import Counter
-
-from flask import Flask, render_template, request, jsonify
-import regex
-
-# Machine Learning content classification (optional)
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-
-try:
-    from spylls.hunspell import Dictionary
-except ImportError:
-    print("Spylls Hunspell library not found. Please install using: pip install spylls")
-    Dictionary = None
+from difflib import get_close_matches
 
 app = Flask(__name__)
 
-# Advanced content classification model
-class ContentClassifier:
-    def __init__(self):
-        # Predefined categories and training data
-        self.categories = [
-            'Эдийн засаг', 
-            'Спорт', 
-            'Улс төр', 
-            'Соёл', 
-            'Технологи'
-        ]
-        
-        # Sample training texts for each category
-        self.training_data = {
-            'Эдийн засаг': [
-                'валют', 'хөрөнгө', 'зах зээл', 'эдийн засаг', 
-                'орлого', 'зардал', 'бизнес', 'хөгжил'
-            ],
-            'Спорт': [
-                'тив', 'тоглолт', 'өрсөлдөөн', 'спорт', 
-                'тамир', 'дасгал', 'тэмцээн', 'хол'
-            ],
-            'Улс төр': [
-                'улс', 'төр', 'сонгууль', 'засгийн газар', 
-                'бодлого', 'улсын', 'хууль'
-            ],
-            'Соёл': [
-                'соёл', 'урлаг', 'уран', 'дуу', 'дуурсгал', 
-                'өв', 'уламжлал'
-            ],
-            'Технологи': [
-                'технологи', 'компьютер', 'сүлжээ', 'интернет', 
-                'инновац', 'сервер', 'программ'
-            ]
-        }
-        
-        self.vectorizer = TfidfVectorizer()
-        self.classifier = MultinomialNB()
-        
-        self._train()
-    
-    def _train(self):
-        # Prepare training data
-        texts = []
-        labels = []
-        
-        for category, keywords in self.training_data.items():
-            for keyword in keywords:
-                texts.append(keyword)
-                labels.append(category)
-        
-        X = self.vectorizer.fit_transform(texts)
-        self.classifier.fit(X, labels)
-    
-    def predict_category(self, text):
-        try:
-            # Vectorize input text
-            text_vector = self.vectorizer.transform([text])
-            prediction = self.classifier.predict(text_vector)
-            return prediction[0]
-        except Exception:
-            return "Ерөнхий мэдээлөл"
-
-# Global instances
-content_classifier = ContentClassifier()
-
-# Dictionary loading
-def load_hunspell_dictionary():
+# Load dictionary files directly with better error handling
+def load_dictionary():
+    words = set()
     try:
-        dict_path = os.path.join(os.path.dirname(__file__), 'mn')
-        aff_file = dict_path + '.aff'
-        dic_file = dict_path + '.dic'
-        
-        if not (os.path.exists(aff_file) and os.path.exists(dic_file)):
-            print(f"Dictionary files not found. Paths checked: {aff_file}, {dic_file}")
-            return None
-        
-        return Dictionary.from_files(dict_path)
+        with open('mn.dic', 'r', encoding='utf-8') as f:
+            # Skip the first line (contains count)
+            next(f)
+            for line in f:
+                # Remove flags and get only the word
+                word = line.strip().split('/')[0].lower()
+                if word and len(word) > 1:  # Skip empty or single-letter words
+                    words.add(word)
     except Exception as e:
-        print(f"Dictionary Loading Error: {e}")
-        return None
+        print(f"Error loading dictionary: {e}")
+        words = set()
+    return words
 
-# Global Hunspell instance
-hunspell_instance = load_hunspell_dictionary()
+MONGOLIAN_WORDS = load_dictionary()
 
-# Advanced stop words
-STOP_WORDS = {
-    'ба', 'болон', 'гэх', 'тэр', 'энэ', 'байна', 'юм', 'байх', 
-    'нь', 'гэж', 'хүн', 'бол', 'хэрэг', 'үед', 'хамаагүй', 
-    'биш', 'юу', 'хэн', 'хаана', 'яагаад', 'яах', 'яг'
+# Common Mongolian stop words (түгээмэл үгс)
+STOP_WORDS = set(['юм', 'бөгөөд', 'ба', 'гэх', 'мөн', 'нь', 'энэ', 'тэр', 'байна', 'болон'])
+
+# Simple category mapping
+CATEGORIES = {
+    'эдийн засаг': ['мөнгө', 'банк', 'зах зээл', 'эдийн засаг', 'бизнес', 'төгрөг', 'валют', 'хөрөнгө'],
+    'спорт': ['хөл бөмбөг', 'тэмцээн', 'медаль', 'тамирчин', 'спорт', 'бөмбөг', 'наадам', 'барилдаан'],
+    'улс төр': ['засгийн газар', 'парламент', 'сонгууль', 'улс төр', 'гишүүн', 'хурал', 'төрийн'],
+    'боловсрол': ['сургууль', 'оюутан', 'багш', 'боловсрол', 'сурагч', 'хичээл'],
 }
 
-def count_mongolian_words(text):
-    """
-    More robust word counting for Mongolian text
-    Considers Mongolian words and handles various text scenarios
-    """
-    # Use regex to find all Mongolian words, filtering out very short tokens
-    words = [word for word in regex.findall(r'\p{Mongolian}+', text) if len(word) > 1]
-    return len(words)
-
-def stem_word(word):
-    """Advanced word stemming."""
-    if hunspell_instance:
-        try:
-            stems = hunspell_instance.stem(word)
-            return stems[0] if stems else word
-        except Exception:
-            return word
-    return word
-
-def process_text_analytics(text):
-    """Comprehensive text processing."""
-    # Tokenization
-    words = regex.findall(r'\p{Mongolian}+', text.lower())
+# Improved word suggestion function
+def suggest_words(word):
+    """Enhanced word suggestion algorithm"""
+    word = word.lower()
+    suggestions = set()
     
-    # Remove stop words and stem
-    processed_words = [
-        stem_word(word) 
-        for word in words 
-        if word not in STOP_WORDS
-    ]
+    # 1. Direct dictionary lookup
+    if word in MONGOLIAN_WORDS:
+        return [word]
     
-    # Analytics
-    unique_words = set(processed_words)
-    word_freq = Counter(processed_words)
+    # 2. Use get_close_matches for better suggestions
+    close_matches = get_close_matches(word, MONGOLIAN_WORDS, n=5, cutoff=0.7)
+    suggestions.update(close_matches)
     
-    # Top words excluding any remaining stop words
-    top_words = {
-        word: count 
-        for word, count in word_freq.most_common(10) 
-        if word not in STOP_WORDS
-    }
+    # 3. Character-based suggestions
+    if len(suggestions) < 5:
+        for dict_word in MONGOLIAN_WORDS:
+            # Only check words of similar length
+            if abs(len(dict_word) - len(word)) <= 1:
+                # Check for one character difference or transposition
+                diff = 0
+                for i in range(min(len(word), len(dict_word))):
+                    if i < len(word) and i < len(dict_word) and word[i] != dict_word[i]:
+                        diff += 1
+                if diff <= 1:
+                    suggestions.add(dict_word)
+                
+                # Check for character transposition
+                if len(word) == len(dict_word):
+                    for i in range(len(word)-1):
+                        if word[i:i+2] == dict_word[i+1] + dict_word[i]:
+                            suggestions.add(dict_word)
     
-    # Misspelled words detection
-    misspelled = {}
-    if hunspell_instance:
-        misspelled = {
-            word: hunspell_instance.suggest(word)[:3] 
-            for word in words 
-            if not hunspell_instance.spell(word)
-        }
-    
-    return {
-        'unique_word_count': len(unique_words),
-        'top_words': top_words,
-        'misspelled_words': misspelled,
-        'content_category': content_classifier.predict_category(text)
-    }
+    return list(suggestions)[:5]
 
 @app.route('/')
-def index():
+def home():
     return render_template('index.html')
 
-@app.route('/process', methods=['POST'])
-def text_processor():
-    try:
-        # Input validation
-        data = request.get_json()
-        if not data or 'text' not in data:
-            return jsonify({"error": "No text provided"}), 400
-        
-        # Debugging: Log the received text
-        print(f"Received text: {data['text'][:100]}...")  # Log first 100 chars
-
-        text = data['text']
-        
-        # Improved word count check
-        word_count = count_mongolian_words(text)
-        print(f"Word count: {word_count}")  # Log word count for debugging
-        
-        if word_count < 300:
-            return jsonify({
-                "error": f"Insufficient text length. Minimum 300 words required. Current: {word_count}"
-            }), 400
-        
-        # Process text
-        results = process_text_analytics(text)
-        
-        return jsonify(results)
+@app.route('/check', methods=['POST'])
+def check_text():
+    data = request.get_json()
+    text = data.get('text', '')
     
-    except Exception as e:
-        # Comprehensive error logging
-        app.logger.error(f"Processing Error: {traceback.format_exc()}")
+    if not text or len(text.strip()) == 0:
         return jsonify({
-            "error": "Text Processing Failed",
-            "details": str(e)
-        }), 500
+            'misspelled': [],
+            'unique_words': 0,
+            'top_words': [],
+            'category': 'бусад'
+        })
+    
+    # Improved word splitting
+    misspelled = []
+    current_position = 0
+    
+    # Split text into words while preserving positions
+    words = re.finditer(r'[а-яөүёА-ЯӨҮЁ]+', text)
+    
+    for match in words:
+        word = match.group()
+        start = match.start()
+        end = match.end()
+        
+        # Only check words longer than 1 character
+        if len(word) > 1 and word.lower() not in MONGOLIAN_WORDS:
+            suggestions = suggest_words(word)
+            if suggestions and suggestions[0] != word.lower():
+                misspelled.append({
+                    'word': word,
+                    'start': start,
+                    'end': end,
+                    'suggestions': suggestions
+                })
+
+    # Word frequency analysis (excluding stop words)
+    words = [word.lower() for word in re.findall(r'[а-яөүёА-ЯӨҮЁ]+', text)]
+    words = [word for word in words if word not in STOP_WORDS and len(word) > 1]
+    
+    unique_words = len(set(words))
+    word_freq = Counter(words)
+    top_words = word_freq.most_common(10)
+    
+    category = classify_text(text)
+
+    return jsonify({
+        'misspelled': misspelled,
+        'unique_words': unique_words,
+        'top_words': top_words,
+        'category': category
+    })
+
+def classify_text(text):
+    text_lower = text.lower()
+    max_score = 0
+    text_category = 'бусад'
+    
+    for category, keywords in CATEGORIES.items():
+        score = sum(1 for keyword in keywords if keyword in text_lower)
+        if score > max_score:
+            max_score = score
+            text_category = category
+    
+    return text_category
 
 if __name__ == '__main__':
     app.run(debug=True)
