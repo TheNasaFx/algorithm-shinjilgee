@@ -1,18 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="mn">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Монгол Текст Шалгагч</title>
     <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f4f4f9;
+      }
       .container {
-        margin: 20px;
+        margin: 20px auto;
         max-width: 800px;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
       }
       #textInput {
         width: 100%;
-        min-height: 200px;
+        min-height: 150px;
+        padding: 10px;
+        font-size: 16px;
+        margin-bottom: 20px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        outline: none;
+      }
+      #textDisplay {
+        width: 100%;
+        min-height: 150px;
         padding: 10px;
         margin-bottom: 20px;
-        font-size: 16px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background: #fafafa;
+        white-space: pre-wrap;
+        word-wrap: break-word;
       }
       .misspelled {
         text-decoration: underline wavy red;
@@ -22,35 +48,40 @@
         position: absolute;
         background: white;
         border: 1px solid #ccc;
-        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-        padding: 5px;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         display: none;
         z-index: 1000;
+        padding: 5px;
+        max-width: 200px;
+        overflow-y: auto;
       }
       .suggestion-item {
-        cursor: pointer;
         padding: 5px;
+        cursor: pointer;
+        border-bottom: 1px solid #f4f4f4;
+      }
+      .suggestion-item:last-child {
+        border-bottom: none;
       }
       .suggestion-item:hover {
         background: #f0f0f0;
       }
       #stats {
-        margin-top: 20px;
         padding: 10px;
-        border: 1px solid #ccc;
+        background: #f9f9f9;
+        border: 1px solid #ddd;
         border-radius: 5px;
-      }
-      #textDisplay {
-        border: 1px solid #ccc;
-        min-height: 200px;
-        padding: 10px;
         margin-top: 20px;
-        white-space: pre-wrap;
+      }
+      #stats ul {
+        padding-left: 20px;
       }
     </style>
   </head>
   <body>
     <div class="container">
+      <h1>Монгол Текст Шалгагч</h1>
       <textarea id="textInput" placeholder="Текстээ энд бичнэ үү..."></textarea>
       <div id="textDisplay"></div>
       <div id="suggestions"></div>
@@ -89,26 +120,30 @@
             highlightMisspelledWords(text, data.misspelled);
             updateStats(data);
           })
-          .catch((error) => console.error("Error:", error));
+          .catch((error) => {
+            console.error("Error:", error);
+            statsDiv.innerHTML =
+              "<p style='color: red;'>Сервертэй холбогдох боломжгүй байна!</p>";
+          });
       }
 
       function highlightMisspelledWords(text, misspelled) {
         let highlightedText = text;
 
-        // Apply highlights from end to start to maintain positions
         for (let i = misspelled.length - 1; i >= 0; i--) {
-          const word = misspelled[i];
-          highlightedText =
-            highlightedText.substring(0, word.start) +
+          const { word, start, end } = misspelled[i];
+          const span =
             `<span class="misspelled" data-index="${i}">` +
-            highlightedText.substring(word.start, word.end) +
-            "</span>" +
-            highlightedText.substring(word.end);
+            text.substring(start, end) +
+            "</span>";
+          highlightedText =
+            highlightedText.substring(0, start) +
+            span +
+            highlightedText.substring(end);
         }
 
         textDisplay.innerHTML = highlightedText;
 
-        // Add event listeners for suggestions
         document.querySelectorAll(".misspelled").forEach((span) => {
           span.addEventListener("contextmenu", showSuggestions);
         });
@@ -128,9 +163,10 @@
           suggestionsDiv.appendChild(div);
         });
 
+        const rect = e.target.getBoundingClientRect();
+        suggestionsDiv.style.left = `${rect.left}px`;
+        suggestionsDiv.style.top = `${rect.bottom + window.scrollY}px`;
         suggestionsDiv.style.display = "block";
-        suggestionsDiv.style.left = e.pageX + "px";
-        suggestionsDiv.style.top = e.pageY + "px";
       }
 
       function replaceMisspelledWord(word, suggestion) {
@@ -144,19 +180,18 @@
 
       function updateStats(data) {
         statsDiv.innerHTML = `
-                <h3>Текстийн шинжилгээ:</h3>
-                <p>Нийт ялгаатай үг: ${data.unique_words}</p>
-                <h4>Хамгийн их давтагдсан 10 үг:</h4>
-                <ul>
-                    ${data.top_words
-                      .map(([word, count]) => `<li>${word}: ${count} удаа</li>`)
-                      .join("")}
-                </ul>
-                <p>Текстийн ангилал: ${data.category}</p>
-            `;
+          <h3>Текстийн шинжилгээ:</h3>
+          <p>Нийт ялгаатай үг: ${data.unique_words}</p>
+          <h4>Хамгийн их давтагдсан 10 үг:</h4>
+          <ul>
+            ${data.top_words
+              .map(([word, count]) => `<li>${word}: ${count} удаа</li>`)
+              .join("")}
+          </ul>
+          <p>Текстийн ангилал: ${data.category}</p>
+        `;
       }
 
-      // Close suggestions when clicking outside
       document.addEventListener("click", (e) => {
         if (!e.target.closest("#suggestions")) {
           suggestionsDiv.style.display = "none";
