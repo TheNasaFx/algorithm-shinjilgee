@@ -19,7 +19,7 @@ def topological_sort_dfs(vertices, edges):
         if vertex not in visited:
             dfs(vertex)
 
-    return stack[::-1]  # Reverse the stack to get the topological order
+    return stack[::-1]  
 
 # Example Usage:
 V = 6

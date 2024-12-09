@@ -2,14 +2,12 @@ from collections import defaultdict
 
 class Solution:
     def checkIfPrerequisite(self, numCourses, prerequisites, queries):
-        # Step 1: Initialize the graph and transitive closure matrix
         graph = defaultdict(list)
         for a, b in prerequisites:
             graph[a].append(b)
         
         isPrerequisite = [[False] * numCourses for _ in range(numCourses)]
         
-        # Step 2: Perform DFS to fill transitive closure
         def dfs(course, target):
             if isPrerequisite[course][target]:
                 return
@@ -21,7 +19,6 @@ class Solution:
             for neighbor in graph[course]:
                 dfs(course, neighbor)
         
-        # Step 3: Answer the queries
         return [isPrerequisite[u][v] for u, v in queries]
 
 # Example usage

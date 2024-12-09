@@ -5,7 +5,6 @@
  * @return {boolean[]}
  */
 function checkIfPrerequisite(numCourses, prerequisites, queries) {
-  // Step 1: Initialize the graph and transitive closure matrix
   const graph = new Map();
   for (let i = 0; i < numCourses; i++) {
     graph.set(i, []);
@@ -18,7 +17,6 @@ function checkIfPrerequisite(numCourses, prerequisites, queries) {
     Array(numCourses).fill(false)
   );
 
-  // Step 2: Perform DFS to fill transitive closure
   function dfs(course, target) {
     if (isPrerequisite[course][target]) return;
     isPrerequisite[course][target] = true;
@@ -33,11 +31,9 @@ function checkIfPrerequisite(numCourses, prerequisites, queries) {
     }
   }
 
-  // Step 3: Answer the queries
   return queries.map(([u, v]) => isPrerequisite[u][v]);
 }
 
-// Example usage
 console.log(
   checkIfPrerequisite(
     2,

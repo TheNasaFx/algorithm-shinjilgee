@@ -4,7 +4,7 @@ class Solution:
     def openLock(self, deadends, target):
         dead_set = set(deadends)
         visited = set()
-        queue = deque([("0000", 0)])  # (current combination, steps)
+        queue = deque([("0000", 0)])  
         
         if "0000" in dead_set:
             return -1
@@ -20,7 +20,6 @@ class Solution:
             
             visited.add(combination)
             
-            # Generate all possible next states
             for i in range(4):
                 digit = int(combination[i])
                 for move in (-1, 1):  # Move the wheel up or down

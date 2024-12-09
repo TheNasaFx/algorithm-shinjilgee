@@ -1,7 +1,7 @@
 function openLock(deadends, target) {
   const deadSet = new Set(deadends);
   const visited = new Set();
-  const queue = [["0000", 0]]; // [current combination, steps]
+  const queue = [["0000", 0]];
 
   if (deadSet.has("0000")) return -1;
 
@@ -14,7 +14,6 @@ function openLock(deadends, target) {
 
     visited.add(combination);
 
-    // Generate all possible next states
     for (let i = 0; i < 4; i++) {
       const digit = parseInt(combination[i]);
       for (const move of [-1, 1]) {

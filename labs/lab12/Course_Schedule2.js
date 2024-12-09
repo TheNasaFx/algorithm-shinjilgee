@@ -4,7 +4,6 @@
  * @return {number[]}
  */
 function findOrder(numCourses, prerequisites) {
-  // Step 1: Build the graph and in-degree array
   const graph = new Map();
   const inDegree = Array(numCourses).fill(0);
 
@@ -14,7 +13,6 @@ function findOrder(numCourses, prerequisites) {
     inDegree[course]++;
   }
 
-  // Step 2: Initialize the queue with courses that have no prerequisites
   const queue = [];
   for (let i = 0; i < numCourses; i++) {
     if (inDegree[i] === 0) queue.push(i);
@@ -22,7 +20,6 @@ function findOrder(numCourses, prerequisites) {
 
   const courseOrder = [];
 
-  // Step 3: Process the courses
   while (queue.length > 0) {
     const current = queue.shift();
     courseOrder.push(current);
@@ -37,11 +34,9 @@ function findOrder(numCourses, prerequisites) {
     }
   }
 
-  // Step 4: Check if all courses are processed
   return courseOrder.length === numCourses ? courseOrder : [];
 }
 
-// Example usage
 console.log(findOrder(2, [[1, 0]])); // Output: [0, 1]
 console.log(
   findOrder(4, [
